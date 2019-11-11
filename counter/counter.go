@@ -18,18 +18,8 @@ type Counter struct {
 
 	data map[string]Info
 
-	totalMsgReceived   uint64
-	totalBytesReceived uint64
-	totalMsgSent       uint64
-	totalBytesSent     uint64
-
-	bytesSent     uint64
-	bytesReceived uint64
-	msgSent       uint64
-	msgReceived   uint64
-
-	mps float64
-	bps float64
+	appMessages       uint64
+	appMessagesUseful uint64
 
 	network *p2p.Network
 }
@@ -93,24 +83,12 @@ func (c *Counter) Drive() {
 		parcel := p2p.NewParcel(p2p.Broadcast, payload)
 		c.network.ToNetwork.Send(parcel)
 
-		atomic.AddUint64(&c.totalMsgSent, 1)
-		atomic.AddUint64(&c.msgSent, 1)
-		atomic.AddUint64(&c.totalBytesSent, uint64(len(payload)))
-		atomic.AddUint64(&c.bytesSent, uint64(len(payload)))
 	}
 }
 
 func (c *Counter) Measure() {
 	ticker := time.NewTicker(time.Second * 15)
 	for range ticker.C {
-		c.mps = (float64(c.msgReceived) + float64(c.msgSent)) / 15
-		c.bps = (float64(c.bytesReceived) + float64(c.bytesSent)) / 15
-
-		atomic.StoreUint64(&c.msgSent, 0)
-		atomic.StoreUint64(&c.msgReceived, 0)
-		atomic.StoreUint64(&c.bytesReceived, 0)
-		atomic.StoreUint64(&c.bytesSent, 0)
-
 		var active, inactive int
 		for _, b := range c.data {
 			if time.Since(b.Last) < time.Minute {
@@ -120,15 +98,14 @@ func (c *Counter) Measure() {
 			}
 		}
 
-		log.Printf("[app] Peers[%d Active, %d Inactive] App[M/s: %.2f, KB/s: %.2f] Total[M: %d, KB: %d]", active, inactive, c.mps, c.bps/1000, c.totalMsgReceived+c.totalMsgSent, (c.totalBytesReceived+c.totalBytesSent)/1000)
+		info := c.network.GetInfo()
+
+		log.Printf("[app] Peers[Active: %d, Inactive: %d, Connected: %d] Net[M/s: %.2f, KB/s: %.2f] App[Useful: %d, Total: %d]", active, inactive, info.Peers, info.Receiving+info.Sending, (info.Upload+info.Download)/1000, c.appMessagesUseful, c.appMessages)
 	}
 }
 
 func (c *Counter) Handle(msg *p2p.Parcel) error {
-	atomic.AddUint64(&c.totalMsgReceived, 1)
-	atomic.AddUint64(&c.msgReceived, 1)
-	atomic.AddUint64(&c.totalBytesReceived, uint64(len(msg.Payload)))
-	atomic.AddUint64(&c.bytesReceived, uint64(len(msg.Payload)))
+	atomic.AddUint64(&c.appMessages, 1)
 
 	buf := new(IntBuffer)
 	n, err := buf.ReadFrom(bytes.NewReader(msg.Payload))
@@ -175,6 +152,7 @@ func (c *Counter) UpdateInfo(hash string, count uint64) bool {
 	}
 
 	if count > known {
+		atomic.AddUint64(&c.appMessagesUseful, 1)
 		if count > known+1 {
 			skipped += count - known
 		}
