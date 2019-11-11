@@ -1,9 +1,15 @@
 package counter
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -12,14 +18,19 @@ import (
 
 type Counter struct {
 	seed, bind, port string
+	debug            bool
 
 	instanceid string
 	count      uint64
 
-	data map[string]Info
+	data    map[string]Info
+	dataMtx sync.Mutex
 
 	appMessages       uint64
 	appMessagesUseful uint64
+
+	multiplier     float64
+	lastMultiplier time.Time
 
 	network *p2p.Network
 }
@@ -30,15 +41,16 @@ type Info struct {
 	Last    time.Time
 }
 
-func NewCounter(seed, bind, port string) *Counter {
+func NewCounter(seed, bind, port string, debug bool) *Counter {
 	c := new(Counter)
 	c.seed = seed
 	c.bind = bind
 	c.port = port
+	c.debug = debug
 	buf := make([]byte, 8)
 	rng.Read(buf)
 	c.instanceid = fmt.Sprintf("App%x", buf)
-
+	c.multiplier = 1
 	c.data = make(map[string]Info)
 	return c
 }
@@ -51,7 +63,8 @@ func (c *Counter) Run() error {
 	conf := p2p.DefaultP2PConfiguration()
 	conf.ListenPort = c.port
 	conf.Network = networkID
-	conf.NodeName = fmt.Sprintf("Test App Node %x", c.instanceid)
+	conf.NodeName = fmt.Sprintf("Test App Node %s", c.instanceid)
+	conf.PeerRequestInterval = time.Second * 5
 	conf.SeedURL = c.seed
 	conf.Target = 16
 	conf.Drop = 14
@@ -62,23 +75,57 @@ func (c *Counter) Run() error {
 	if err != nil {
 		return err
 	}
+
+	if c.debug {
+		p2p.DebugServer(network)
+		log.Println("[app] Debug server started on http://localhost:8070/")
+	}
+
 	c.network = network
 	c.network.Run()
 
 	go c.Drive()
 	go c.Measure()
-
+	go c.Keyboard()
 	for msg := range c.network.FromNetwork {
 		c.Handle(msg)
 	}
 	return nil
 }
 
+func (c *Counter) Keyboard() {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		in, _ := reader.ReadString('\n')
+		in = strings.TrimSpace(in)
+		if in == "" {
+			continue
+		}
+
+		if time.Since(c.lastMultiplier) < time.Second*30 {
+			log.Println("[app] can't change multiplier for another", c.lastMultiplier.Add(time.Second*30).Sub(time.Now()).Seconds(), "secs")
+			continue
+		}
+
+		f, err := strconv.ParseFloat(in, 64)
+		if err != nil {
+			log.Println("invalid multiplier:", err)
+			continue
+		}
+
+		log.Println("[app] Sending multiplier signal of", f)
+
+		multimsg := NewMultiplier(c.instanceid, f)
+		parcel := p2p.NewParcel(p2p.FullBroadcast, multimsg)
+		c.network.ToNetwork.Send(parcel)
+	}
+}
+
 func (c *Counter) Drive() {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(time.Millisecond * 100)
 	for range ticker.C {
 		c.count++
-		payload := NewIncrease(c.instanceid, c.count)
+		payload := NewIncrease(c.instanceid, c.count, c.multiplier)
 
 		parcel := p2p.NewParcel(p2p.Broadcast, payload)
 		c.network.ToNetwork.Send(parcel)
@@ -90,6 +137,7 @@ func (c *Counter) Measure() {
 	ticker := time.NewTicker(time.Second * 15)
 	for range ticker.C {
 		var active, inactive int
+		c.dataMtx.Lock()
 		for _, b := range c.data {
 			if time.Since(b.Last) < time.Minute {
 				active++
@@ -97,10 +145,11 @@ func (c *Counter) Measure() {
 				inactive++
 			}
 		}
+		c.dataMtx.Unlock()
 
 		info := c.network.GetInfo()
 
-		log.Printf("[app] Peers[Active: %d, Inactive: %d, Connected: %d] Net[M/s: %.2f, KB/s: %.2f] App[Useful: %d, Total: %d]", active, inactive, info.Peers, info.Receiving+info.Sending, (info.Upload+info.Download)/1000, c.appMessagesUseful, c.appMessages)
+		log.Printf("App[%.2fx] Peers[Active: %d, Inactive: %d, Connected: %d] Net[M/s: %.2f, KB/s: %.2f (%.2f/%.2f)] App[Useful: %d, Total: %d]", c.multiplier, active, inactive, info.Peers, info.Receiving+info.Sending, (info.Upload+info.Download)/1000, info.Download/1000, info.Upload/1000, c.appMessagesUseful, c.appMessages)
 	}
 }
 
@@ -122,6 +171,19 @@ func (c *Counter) Handle(msg *p2p.Parcel) error {
 	}
 
 	switch typ {
+	case MsgMultiplier:
+		var multi float64
+		if err := binary.Read(buf, binary.LittleEndian, &multi); err != nil {
+			return fmt.Errorf("unable to read multiplier: %v", err)
+		}
+
+		if time.Since(c.lastMultiplier) > time.Second*30 && multi != c.multiplier {
+			c.lastMultiplier = time.Now()
+			c.multiplier = multi
+			log.Printf("[app] multiplier updated to %.2f", multi)
+			msg.Address = p2p.FullBroadcast
+			c.network.ToNetwork.Send(msg)
+		}
 	case MsgIncrease:
 		count, err := buf.ReadUint64()
 		if err != nil {
@@ -145,6 +207,8 @@ func (c *Counter) Handle(msg *p2p.Parcel) error {
 }
 
 func (c *Counter) UpdateInfo(hash string, count uint64) bool {
+	c.dataMtx.Lock()
+	defer c.dataMtx.Unlock()
 	var known, skipped uint64
 	if existing, ok := c.data[hash]; ok {
 		known = existing.Count

@@ -8,11 +8,12 @@ import (
 const (
 	MsgNoMessage uint32 = iota
 	MsgIncrease
+	MsgMultiplier
 )
 
 const Delim = 'ß'
 
-func NewIncrease(instanceid string, count uint64) []byte {
+func NewIncrease(instanceid string, count uint64, multiplier float64) []byte {
 	buf := new(IntBuffer) // initial size of 64 bytes
 	buf.WriteUint32(MsgIncrease)
 	buf.WriteUint64(count)
@@ -20,10 +21,21 @@ func NewIncrease(instanceid string, count uint64) []byte {
 	buf.WriteByte(Delim)
 
 	size := rng.Intn(4096)
+	if multiplier != 1 {
+		size = int(float64(size) * multiplier)
+	}
+
 	junk := make([]byte, size)
 	rng.Read(junk)
 	buf.Write(junk)
 
+	return buf.Bytes()
+}
+
+func NewMultiplier(instanceid string, multiplier float64) []byte {
+	buf := new(IntBuffer) // initial size of 64 bytes
+	buf.WriteUint32(MsgMultiplier)
+	binary.Write(buf, binary.LittleEndian, multiplier)
 	return buf.Bytes()
 }
 

@@ -10,7 +10,7 @@ import (
 	"github.com/whosoup/factom-p2p-testapp/counter"
 )
 
-var driver bool
+var debug bool
 var seed string
 var bind string
 var port string
@@ -19,6 +19,7 @@ func init() {
 	rootCmd.Flags().StringVar(&seed, "seed", "http://localhost/tbd", "--seed=http://tbd")
 	rootCmd.Flags().StringVar(&bind, "bind", "", "--bind=127.0.0.2")
 	rootCmd.Flags().StringVar(&port, "port", "8099", "--port=8099")
+	rootCmd.Flags().BoolVar(&debug, "debug", false, "--debug")
 }
 
 var rootCmd = &cobra.Command{
@@ -27,8 +28,10 @@ var rootCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
 
-		log2.SetLevel(log2.WarnLevel)
-		counter := counter.NewCounter(seed, bind, port)
+		if debug {
+			log2.SetLevel(log2.DebugLevel)
+		}
+		counter := counter.NewCounter(seed, bind, port, debug)
 
 		if err := counter.Run(); err != nil {
 			log.Fatal(err)
