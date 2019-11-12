@@ -70,6 +70,7 @@ func (c *Counter) Run() error {
 	conf.Drop = 14
 	conf.Fanout = 5
 	conf.Max = 18
+	conf.BindIP = c.bind
 
 	network, err := p2p.NewNetwork(conf)
 	if err != nil {
@@ -122,14 +123,14 @@ func (c *Counter) Keyboard() {
 }
 
 func (c *Counter) Drive() {
-	ticker := time.NewTicker(time.Millisecond * 100)
-	for range ticker.C {
+	//ticker := time.NewTicker(time.Millisecond * 100)
+	for {
+		time.Sleep(time.Millisecond * 100 / time.Duration(c.multiplier))
 		c.count++
 		payload := NewIncrease(c.instanceid, c.count, c.multiplier)
 
 		parcel := p2p.NewParcel(p2p.Broadcast, payload)
 		c.network.ToNetwork.Send(parcel)
-
 	}
 }
 

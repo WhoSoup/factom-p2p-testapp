@@ -30,6 +30,8 @@ var rootCmd = &cobra.Command{
 
 		if debug {
 			log2.SetLevel(log2.DebugLevel)
+		} else {
+			log2.SetLevel(log2.ErrorLevel)
 		}
 		counter := counter.NewCounter(seed, bind, port, debug)
 
