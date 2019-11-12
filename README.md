@@ -6,6 +6,16 @@ The app tracks counters for each message it receives, tracking all the talkative
 
 At the default **multiplier** of 1, each node increases the counter every **100ms**, yielding 10 Messages/second. A node can increase the multiplier, which sends out a signal to all other nodes to also increase the multiplier. The formula is **100ms/multiplier**, so a multiplier of 100 yields one message every ms, or 1000 M/s. A multiplier of 500 yields 5000 M/s.
 
+## Running
+
+To take part in the official test, you can run it with the default parameters, which runs on port **8099** and grabs a [seed file from github](https://raw.githubusercontent.com/WhoSoup/factom-p2p-testapp/master/seed.txt).
+
+The following parameters are available:
+* **seed**: The url of the seed file. Default is `https://raw.githubusercontent.com/WhoSoup/factom-p2p-testapp/master/seed.txt`
+* **bind**: (optional) a local interface to bind to. Default is blank to bind to any ip.
+* **port**: The port that peers can connect to. Default is `8099`. If the port is not open to the public, you can still connect but no one can connect to you.
+* **debug** (flag): Turn on debug logging for the p2p library if you are interested in more details. Can be pretty spammy and is not recommended.
+
 ## Output
 
 Every 15 seconds, the app prints a message along the lines of:
