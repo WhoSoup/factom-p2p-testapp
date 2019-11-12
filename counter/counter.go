@@ -66,10 +66,10 @@ func (c *Counter) Run() error {
 	conf.NodeName = fmt.Sprintf("Test App Node %s", c.instanceid)
 	conf.PeerRequestInterval = time.Second * 5
 	conf.SeedURL = c.seed
-	conf.Target = 16
-	conf.Drop = 14
+	conf.Target = 8
+	conf.Drop = 6
 	conf.Fanout = 5
-	conf.Max = 18
+	conf.Max = 12
 	conf.BindIP = c.bind
 
 	network, err := p2p.NewNetwork(conf)
