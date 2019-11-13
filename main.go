@@ -16,9 +16,9 @@ var bind string
 var port string
 
 func init() {
-	rootCmd.Flags().StringVar(&seed, "seed", "https://raw.githubusercontent.com/WhoSoup/factom-p2p-testapp/master/seed.txt", "--seed=http://tbd")
+	rootCmd.Flags().StringVar(&seed, "seed", "http://192.168.0.13/seed.txt", "--seed=http://url.com/seed.txt")
 	rootCmd.Flags().StringVar(&bind, "bind", "", "--bind=127.0.0.2")
-	rootCmd.Flags().StringVar(&port, "port", "8099", "--port=8099")
+	rootCmd.Flags().StringVar(&port, "port", "7654", "--port=7654")
 	rootCmd.Flags().BoolVar(&debug, "debug", false, "--debug")
 }
 

@@ -9,3 +9,5 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/whosoup/factom-p2p v0.0.0-20191111123452-828f8760641c
 )
+
+replace github.com/whosoup/factom-p2p => ../factom-p2p

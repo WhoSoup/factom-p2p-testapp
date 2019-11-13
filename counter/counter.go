@@ -151,6 +151,10 @@ func (c *Counter) Measure() {
 		info := c.network.GetInfo()
 
 		log.Printf("App[%.2fx] Peers[Active: %d, Inactive: %d, Connected: %d] Net[M/s: %.2f, KB/s: %.2f (%.2f/%.2f)] App[Useful: %d, Total: %d]", c.multiplier, active, inactive, info.Peers, info.Receiving+info.Sending, (info.Upload+info.Download)/1000, info.Download/1000, info.Upload/1000, c.appMessagesUseful, c.appMessages)
+		fmt.Printf("\tPeers\n")
+		for hash, p := range c.network.GetPeerMetrics() {
+			fmt.Printf("\t\t%25s Mps[%.2f/%.2f] KBs[%.2f/%.2f] Cap[%.2f]\n", hash, p.MPSDown, p.MPSUp, p.BPSDown/1000, p.BPSUp/1000, p.Capacity)
+		}
 	}
 }
 
