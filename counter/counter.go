@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"text/tabwriter"
 	"time"
 
 	"github.com/whosoup/factom-p2p"
@@ -125,7 +126,7 @@ func (c *Counter) Keyboard() {
 func (c *Counter) Drive() {
 	//ticker := time.NewTicker(time.Millisecond * 100)
 	for {
-		time.Sleep(time.Millisecond * 100 / time.Duration(c.multiplier))
+		time.Sleep(time.Millisecond * 100) //time.Duration(c.multiplier))
 		c.count++
 		payload := NewIncrease(c.instanceid, c.count, c.multiplier)
 
@@ -137,24 +138,40 @@ func (c *Counter) Drive() {
 func (c *Counter) Measure() {
 	ticker := time.NewTicker(time.Second * 15)
 	for range ticker.C {
-		var active, inactive int
+		info := c.network.GetInfo()
+
+		log.Println("Update")
+		tw := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.Debug)
+		fmt.Fprintln(tw, "Multiplier\tUseful\tTotal\tDown\tUp\tOur Count")
+		fmt.Fprintf(tw, "%.2fx\t%d\t%d\t%s\t%s\t%d\n", c.multiplier, c.appMessagesUseful, c.appMessages, HRSpeed(info.Download), HRSpeed(info.Upload), c.count)
+
+		tw.Flush()
+		fmt.Println()
+		tw = tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.Debug)
+		fmt.Fprintln(tw, "AppID\tCount\tSkipped\tLast Active")
 		c.dataMtx.Lock()
-		for _, b := range c.data {
-			if time.Since(b.Last) < time.Minute {
-				active++
-			} else {
-				inactive++
+		for id, app := range c.data {
+			if time.Since(app.Last) > time.Minute*5 {
+				continue
 			}
+			nid := id
+			if id == c.instanceid {
+				nid = "me"
+			}
+			fmt.Fprintf(tw, "%s\t%d\t%d\t%s\n", nid, app.Count, app.Skipped, HRTime(time.Since(app.Last)))
 		}
 		c.dataMtx.Unlock()
 
-		info := c.network.GetInfo()
-
-		log.Printf("App[%.2fx] Peers[Active: %d, Inactive: %d, Connected: %d] Net[M/s: %.2f, KB/s: %.2f (%.2f/%.2f)] App[Useful: %d, Total: %d]", c.multiplier, active, inactive, info.Peers, info.Receiving+info.Sending, (info.Upload+info.Download)/1000, info.Download/1000, info.Upload/1000, c.appMessagesUseful, c.appMessages)
-		fmt.Printf("\tPeers\n")
+		tw.Flush()
+		fmt.Println()
+		tw = tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.Debug)
+		fmt.Fprintln(tw, "Hash\tMps Down\tMps Up\tDown\tUp\tCap\tDropped")
 		for hash, p := range c.network.GetPeerMetrics() {
-			fmt.Printf("\t\t%25s Mps[%.2f/%.2f] KBs[%.2f/%.2f] Cap[%.2f]\n", hash, p.MPSDown, p.MPSUp, p.BPSDown/1000, p.BPSUp/1000, p.Capacity)
+			fmt.Fprintf(tw, "%s\t%.2f\t%.2f\t%s\t%s\t%.2f\t%d\n", hash, p.MPSDown, p.MPSUp, HRSpeed(p.BPSDown), HRSpeed(p.BPSUp), p.Capacity, p.Dropped)
 		}
+		tw.Flush()
+		fmt.Println("==========================================================")
+		fmt.Println()
 	}
 }
 
@@ -200,6 +217,8 @@ func (c *Counter) Handle(msg *p2p.Parcel) error {
 			return fmt.Errorf("unable to read id: %v", err)
 		}
 
+		id = id[:len(id)-1]
+
 		if c.UpdateInfo(id, count) { // only send out when we updated, otherwise duplicate
 			msg.Address = p2p.Broadcast
 			c.network.ToNetwork.Send(msg)
@@ -215,14 +234,15 @@ func (c *Counter) UpdateInfo(hash string, count uint64) bool {
 	c.dataMtx.Lock()
 	defer c.dataMtx.Unlock()
 	var known, skipped uint64
-	if existing, ok := c.data[hash]; ok {
+	existing, ok := c.data[hash]
+	if ok {
 		known = existing.Count
 		skipped = existing.Skipped
 	}
 
 	if count > known {
 		atomic.AddUint64(&c.appMessagesUseful, 1)
-		if count > known+1 {
+		if count > known+1 && ok {
 			skipped += count - known
 		}
 		known = count
@@ -234,4 +254,25 @@ func (c *Counter) UpdateInfo(hash string, count uint64) bool {
 		return true
 	}
 	return false
+}
+
+func HRSpeed(speed float64) string {
+	speed *= 8
+	if speed >= 1e6 {
+		return fmt.Sprintf("%.2f Mbit/s", speed/1e6)
+	}
+	if speed > 1e3 {
+		return fmt.Sprintf("%.2f Kbit/s", speed/1e3)
+	}
+	return fmt.Sprintf("%.2f Bit/s", speed)
+}
+
+func HRTime(t time.Duration) string {
+	if t < time.Second {
+		return "<1s ago"
+	}
+	if t < time.Minute {
+		return fmt.Sprintf("%d ago", int(t.Seconds()))
+	}
+	return fmt.Sprintf("%d ago", int(t.Minutes()))
 }

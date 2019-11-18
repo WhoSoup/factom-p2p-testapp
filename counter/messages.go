@@ -21,9 +21,9 @@ func NewIncrease(instanceid string, count uint64, multiplier float64) []byte {
 	buf.WriteByte(Delim)
 
 	size := rng.Intn(4096)
-	/*if multiplier != 1 {
+	if multiplier != 1 {
 		size = int(float64(size) * multiplier)
-	}*/
+	}
 
 	junk := make([]byte, size)
 	rng.Read(junk)
