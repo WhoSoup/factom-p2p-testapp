@@ -272,7 +272,7 @@ func HRTime(t time.Duration) string {
 		return "<1s ago"
 	}
 	if t < time.Minute {
-		return fmt.Sprintf("%d ago", int(t.Seconds()))
+		return fmt.Sprintf("%ds ago", int(t.Seconds()))
 	}
-	return fmt.Sprintf("%d ago", int(t.Minutes()))
+	return fmt.Sprintf("%dm ago", int(t.Minutes()))
 }
