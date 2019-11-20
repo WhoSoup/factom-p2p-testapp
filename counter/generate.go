@@ -31,3 +31,8 @@ func WeightedRandom(seed int64) int64 {
 	val := seed2float(seed)
 	return int64(math.Floor(Min + (Max+1-Min)*(math.Pow(val, power))))
 }
+
+func Sha(msg []byte) []byte {
+	tmp := sha256.Sum256(msg)
+	return tmp[:]
+}
