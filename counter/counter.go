@@ -130,6 +130,7 @@ func (c *Counter) Keyboard() {
 			}
 			parcel.Header.TargetPeer = p2p.FullBroadcastFlag
 			dropped := p2p.BlockFreeChannelSend(c.network.ToNetwork, parcel)
+			atomic.AddUint64(&c.appMessages, 1)
 			atomic.AddUint64(&c.appMessagesDropped, uint64(dropped))
 		}
 	}
@@ -138,7 +139,7 @@ func (c *Counter) Keyboard() {
 func (c *Counter) Drive() {
 	//ticker := time.NewTicker(time.Millisecond * 100)
 	for {
-		time.Sleep(time.Millisecond * 100) // / time.Duration(c.multiplier))
+		time.Sleep(time.Millisecond * 100 / time.Duration(c.multiplier))
 		c.count++
 		payload := NewIncrease(c.instanceid, c.count, c.multiplier)
 
@@ -149,6 +150,7 @@ func (c *Counter) Drive() {
 			}
 			parcel.Header.TargetPeer = p2p.FullBroadcastFlag
 			dropped := p2p.BlockFreeChannelSend(c.network.ToNetwork, parcel)
+			atomic.AddUint64(&c.appMessages, 1)
 			atomic.AddUint64(&c.appMessagesDropped, uint64(dropped))
 		}
 	}
@@ -229,6 +231,7 @@ func (c *Counter) Handle(msg p2p.Parcel) error {
 			log.Printf("[app] multiplier updated to %.2f", multi)
 			msg.Header.TargetPeer = p2p.FullBroadcastFlag
 			dropped := p2p.BlockFreeChannelSend(c.network.ToNetwork, msg)
+			atomic.AddUint64(&c.appMessages, 1)
 			atomic.AddUint64(&c.appMessagesDropped, uint64(dropped))
 		}
 	case MsgIncrease:
@@ -247,6 +250,7 @@ func (c *Counter) Handle(msg p2p.Parcel) error {
 		if c.UpdateInfo(id, count) { // only send out when we updated, otherwise duplicate
 			msg.Header.TargetPeer = p2p.FullBroadcastFlag
 			dropped := p2p.BlockFreeChannelSend(c.network.ToNetwork, msg)
+			atomic.AddUint64(&c.appMessages, 1)
 			atomic.AddUint64(&c.appMessagesDropped, uint64(dropped))
 
 		}
